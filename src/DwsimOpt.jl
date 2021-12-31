@@ -2,6 +2,13 @@
 """
 module DwsimOpt
 
-greet() = print("Hello World!")
+# importing packages
+using Test
+
+# export packages
+export greet, farewell
+
+# includes
+include("greeting_function.jl")
 
 end # module
