@@ -6,9 +6,9 @@ module DwsimOpt
 using Test
 
 # export packages
-export greet, farewell
+export OptProblemDef
 
 # includes
-include("greeting_function.jl")
+include("SimOpt.jl")
 
 end # module

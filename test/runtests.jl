@@ -1,3 +1,4 @@
 using Test
+using DwsimOpt
 
-@test [1,2] + [2,1] == [3,3]
+@test isa(OptProblemDef, Function)

@@ -1,4 +1,0 @@
-using DwsimOpt
-
-greet()
-farewell()

@@ -1,6 +1,18 @@
+struct optProblem
+    f
+    g
+    x0
+    searchSpace
+    dim
+    sim_jl
+end
+
+
 using PyCall
 
-@pyimport dwsimopt
+
+# @pyimport dwsimopt
+pyimport("dwsimopt")
 
 py"""
 import numpy as np
@@ -21,7 +33,7 @@ print(path2dwsim)
 
 # Loading DWSIM simulation into Python (Simulation object)
 sim_smr = SimulationOptimization(dof=np.array([]), path2sim= os.path.join(dir_path + "/examples/SMR.dwxmz"), 
-                     path2dwsim = path2dwsim)
+                    path2dwsim = path2dwsim)
 sim_smr.savepath = os.path.join(dir_path + "/examples/SMR2.dwxmz")
 print(sim_smr.path2sim)
 print(sim_smr.savepath)
@@ -78,21 +90,13 @@ f = lambda x: sim_smr.calculate_optProblem(np.asarray(x)/regularizer)[0:sim_smr.
 g = lambda x: sim_smr.calculate_optProblem(np.asarray(x)/regularizer)[sim_smr.n_f:(sim_smr.n_f+sim_smr.n_g)]
 """
 
-py"f(1*x0*regularizer)"
-f = py"f"
-g = py"g"
-x0 = py"x0*regularizer"
-searchSpace = py"bounds_reg"
-sim_jl = py"sim_smr"
+function OptProblemDef()
+    sim_jl = py"sim_smr"
+    f = py"f"
+    g = py"g"
+    x0 = py"x0*regularizer"
+    searchSpace = py"bounds_reg"
+    dim = sim_jl.n_dof
 
-using BlackBoxOptim
-
-function fpen(x)
-    ff = Float64(f(x)[1])
-    gg = g(x)
-    return Float64(ff .+ sum(max.(0, gg)))
+    return optProblem(f, g, x0, searchSpace, dim, sim_jl)
 end
-
-bound = [Tuple(searchSpace[:, i]') for i = 1:size(searchSpace)[2]]
-
-res = bboptimize(fpen; SearchRange = bound, NumDimensions = sim_jl.n_dof)
