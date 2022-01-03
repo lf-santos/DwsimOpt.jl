@@ -10,6 +10,16 @@ end
 
 using PyCall
 
+# Check if dwsimopt is installed
+py"""
+import importlib
+dwsimopt_spec = importlib.util.find_spec("dwsimopt")
+found = dwsimopt_spec is not None
+if found == False:
+    import subprocess
+    import sys
+    subprocess.check_call( [sys.executable, "-m", "pip", "install", "dwsimopt"] )
+"""
 
 # @pyimport dwsimopt
 pyimport("dwsimopt")

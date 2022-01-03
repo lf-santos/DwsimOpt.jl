@@ -9,4 +9,4 @@ end
 
 bound = [Tuple(op1.searchSpace[:, i]') for i = 1:size(op1.searchSpace)[2]]
 
-res = bboptimize(fpen; SearchRange = bound, NumDimensions = sim_jl.n_dof, MaxTime = 10.0)
+res = bboptimize(fpen; SearchRange = bound, NumDimensions = op1.dim, MaxTime = 10.0)
