@@ -28,11 +28,15 @@ py"""
 import numpy as np
 import math
 
-import os 
+import os
 from pathlib import Path
 
 dir_path = str(Path(os.getcwd()).absolute())
 print(dir_path)
+import subprocess
+import sys
+subprocess.check_call( ["python", "-m", "pip", "list"] )
+print(sys.executable)
 
 import sys
 from dwsimopt.sim_opt import SimulationOptimization
@@ -40,22 +44,22 @@ from dwsimopt.sim_opt import SimulationOptimization
 # Getting DWSIM path from system path
 path2dwsim = "C:/Users/lfsfr/AppData/Local/DWSIM7/"
 print(path2dwsim)
+"""
 
+py"""
 # Loading DWSIM simulation into Python (Simulation object)
-sim_smr = SimulationOptimization(dof=np.array([]), path2sim= os.path.join(dir_path + "/examples/SMR.dwxmz"), 
-                    path2dwsim = path2dwsim)
-sim_smr.savepath = os.path.join(dir_path + "/examples/SMR2.dwxmz")
+sim_smr = SimulationOptimization(dof=np.array([]), path2sim= os.path.join(dir_path, "examples\\SMR.dwxmz"), 
+                     path2dwsim = path2dwsim)
 print(sim_smr.path2sim)
-print(sim_smr.savepath)
 sim_smr.add_refs()
-
+"""
+py"""
 # Instanciate automation manager object
 from DWSIM.Automation import Automation2
 interf = Automation2()
 
 # Connect simulation in sim.path2sim
 sim_smr.connect(interf)
-
 """
 
 py"""
@@ -110,3 +114,4 @@ function OptProblemDef()
 
     return optProblem(f, g, x0, searchSpace, dim, sim_jl)
 end
+export OptProblemDef

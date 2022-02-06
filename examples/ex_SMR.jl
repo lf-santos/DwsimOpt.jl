@@ -1,5 +1,6 @@
 using BlackBoxOptim
 using DwsimOpt
+include("c:\\Users\\lfsfr\\Desktop\\DwsimOpt.jl\\src\\SimOpt.jl")
 
 op1 = OptProblemDef()
 
