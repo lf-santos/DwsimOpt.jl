@@ -83,14 +83,20 @@ g1_bb(x1, x2, x3, x4, x5, x6, x7, x8) = op1.g([x1, x2, x3, x4, x5, x6, x7, x8])[
 g2_bb(x1, x2, x3, x4, x5, x6, x7, x8) = op1.g([x1, x2, x3, x4, x5, x6, x7, x8])[2]
 function ∇g1_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T}
     println("I am in ∇g1_bb with x=", x1)
-    ∇g1_tmp = grad(forward_fdm(2, 1), g1, [x1, x2, x3, x4, x5, x6, x7, x8])[1]
+    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp
+    jac_block([x1, x2, x3, x4, x5, x6, x7, x8])
+    ∇g1_tmp = ∇g1_bkp
+    # ∇g1_tmp = grad(forward_fdm(2, 1), g1, [x1, x2, x3, x4, x5, x6, x7, x8])[1]
     for i = 1:length([x1, x2, x3, x4, x5, x6, x7, x8])
         g[i] = ∇g1_tmp[i]
     end
 end
 function ∇g2_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T}
     println("I am in ∇g2_bb with x=", x1)
-    ∇g2_tmp = grad(forward_fdm(2, 1), g2, [x1, x2, x3, x4, x5, x6, x7, x8])[1]
+    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp
+    jac_block([x1, x2, x3, x4, x5, x6, x7, x8])
+    ∇g2_tmp = ∇g2_bkp
+    # ∇g2_tmp = grad(forward_fdm(2, 1), g2, [x1, x2, x3, x4, x5, x6, x7, x8])[1]
     for i = 1:length([x1, x2, x3, x4, x5, x6, x7, x8])
         g[i] = ∇g2_tmp[i]
     end
