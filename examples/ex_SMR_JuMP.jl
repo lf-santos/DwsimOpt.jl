@@ -15,14 +15,13 @@ sim_jl = py"sim"
 
 # just for testing: connect to another simulation
 py"""
-sim_prico = SimulationOptimization(dof=np.array([]), path2sim= "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/PRICO/PRICO.dwxmz", 
+sim2 = SimulationOptimization(dof=np.array([]), path2sim= "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR.dwxmz", 
                     path2dwsim = $path2dwsim)
-sim_prico.connect(interf)
+sim2.connect(interf)
 """
 
-# sim_smr = OptProblemDef(path2sim = "c:\\Users\\lfsfr\\Desktop\\DwsimOpt.jl\\examples\\SMR.dwxmz", path2dwsim = "C:/Users/lfsfr/AppData/Local/DWSIM7/")
 py"""
-sim_smr = sim
+sim_smr = sim2
 
 # Import dwsim-python data exchange interface (has to be after Automation2)
 from dwsimopt.py2dwsim import create_pddx, assign_pddx

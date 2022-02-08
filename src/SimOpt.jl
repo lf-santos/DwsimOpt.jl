@@ -33,8 +33,9 @@ from pathlib import Path
 dir_path = str(Path(os.getcwd()).absolute())
 print(dir_path)
 import subprocess
-
 import sys
+subprocess.check_call( ["python", "-m", "pip", "list"] )
+
 from dwsimopt.sim_opt import SimulationOptimization
 
 
