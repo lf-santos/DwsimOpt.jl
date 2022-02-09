@@ -5,10 +5,71 @@ using JuMP
 using Ipopt
 using FiniteDifferences
 using LinearAlgebra
+using PyCall
 
-include("c:\\Users\\lfsfr\\Desktop\\DwsimOpt.jl\\src\\SimOpt.jl")
+path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR.dwxmz"
+path2dwsim = "C:/Users/lfsfr/AppData/Local/DWSIM7/"
 
-op1 = OptProblemDef()
+include("c:/Users/lfsfr/Desktop/DwsimOpt.jl/src/SimOpt.jl")
+sim_jl = py"sim"
+
+# just for testing: connect to another simulation
+py"""
+sim2 = SimulationOptimization(dof=np.array([]), path2sim= "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR.dwxmz", 
+                    path2dwsim = $path2dwsim)
+sim2.connect(interf)
+"""
+
+py"""
+sim_smr = sim2
+
+# Import dwsim-python data exchange interface (has to be after Automation2)
+from dwsimopt.py2dwsim import create_pddx, assign_pddx
+
+# Assign DoF:
+create_pddx( ["MR-1", "CompoundMassFlow", "Nitrogen", "kg/s"],    sim_smr, element="dof" )
+create_pddx( ["MR-1", "CompoundMassFlow", "Methane", "kg/s"],     sim_smr, element="dof" )
+create_pddx( ["MR-1", "CompoundMassFlow", "Ethane", "kg/s"],      sim_smr, element="dof" )
+create_pddx( ["MR-1", "CompoundMassFlow", "Propane", "kg/s"],     sim_smr, element="dof" )
+create_pddx( ["MR-1", "CompoundMassFlow", "Isopentane", "Pa"],    sim_smr, element="dof" )
+create_pddx( ["VALV-01", "OutletPressure", "Mixture", "Pa"],      sim_smr, element="dof" )
+create_pddx( ["COMP-1", "OutletPressure", "Mixture", "Pa"],       sim_smr, element="dof" )
+create_pddx( ["COOL-08", "OutletTemperature", "Mixture", "K"],    sim_smr, element="dof" )
+
+# Assign F
+create_pddx( ["Sum_W", "EnergyFlow", "Mixture", "kW"], sim_smr, element="fobj" )
+
+# adding constraints (g_i <= 0):
+g1 = create_pddx( ["MITA1-Calc", "OutputVariable", "mita", "°C"], sim_smr, element="constraint", assign=False )
+assign_pddx( lambda: 3-g1[0]() , ["MITA1-Calc", "OutputVariable", "mita", "°C"], sim_smr, element="constraint" )
+g2 = create_pddx( ["MITA2-Calc", "OutputVariable", "mita", "°C"], sim_smr, element="constraint", assign=False )
+assign_pddx( lambda: 3-g2[0]() , ["MITA2-Calc", "OutputVariable", "mita", "°C"], sim_smr, element="constraint" )
+
+# decision variables bounds
+x0 = np.array( [0.25/3600, 0.70/3600, 1.0/3600, 1.10/3600, 1.80/3600, 2.50e5, 50.00e5, -60+273.15] )
+bounds_raw = np.array( [0.5*np.asarray(x0), 1.5*np.asarray(x0)] )   # 50 % around base case
+bounds_raw[0][-1] = 153     # precool temperature low limit manually
+bounds_raw[1][-1] = 253     # precool temperature upper limit manually
+
+# regularizer calculation
+regularizer = np.zeros(x0.size)
+for i in range(len(regularizer)):
+    regularizer[i] = 10**(-1*math.floor(math.log(x0[i],10))) # regularizer for magnitude order of 1e0
+
+# bounds regularized
+bounds_reg = regularizer*bounds_raw
+
+# objective and constraints lambda definitions
+f = lambda x: sim_smr.calculate_optProblem(np.asarray(x)/regularizer)[0:sim_smr.n_f]
+g = lambda x: sim_smr.calculate_optProblem(np.asarray(x)/regularizer)[sim_smr.n_f:(sim_smr.n_f+sim_smr.n_g)]
+"""
+
+f = py"f"
+g = py"g"
+x0 = py"x0*regularizer"
+searchSpace = py"bounds_reg"
+dim = sim_jl.n_dof
+op1 = optProblem(f, g, x0, searchSpace, dim, sim_jl)
 op1.sim_jl.verbose = false;
 
 # model = Model(optimizer_with_attributes(Ipopt.Optimizer))
