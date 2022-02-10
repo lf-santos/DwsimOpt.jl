@@ -1,11 +1,13 @@
-# To-do: make user-defined objective function and constraints work (no metter what)
-#  -> try declaring x1, x2, ... separatelly. Ugly, but may work.
+# To-do: derive high-fidelity gradient
 using DwsimOpt
 using JuMP
 using Ipopt
 using FiniteDifferences
 using LinearAlgebra
+using GAMS
+using MadNLP
 
+## SIMULATION OPTIMIZATION PROBLEM DEFINITION
 path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/PRICO/PRICO.dwxmz"
 path2dwsim = "C:/Users/lfsfr/AppData/Local/DWSIM7/"
 
@@ -37,8 +39,11 @@ create_pddx( ["MSTR-03", "MassFraction", "Liquid", "x"], sim, element="constrain
 create_pddx( ["MSTR-05", "MassFraction", "Liquid", "x"], sim, element="constraint" )
 
 # decision variables bounds
-x0 = np.array( [0.269/3600, 0.529/3600, 0.619/3600, 2.847/3600, 2.3e5, 48.00e5] )
-bounds_raw = np.array( [0.5*np.asarray(x0), 1.5*np.asarray(x0)] )   # 50 % around base case
+# x0 = np.array( [1.07249112e-04, 1.93057244e-04, 2.16881626e-04, 7.44968925e-04, 3.43386624e+05, 6.39810411e+06] )
+# x0 = np.array( [1.12083333e-04, 1.30420113e-04, 2.57333445e-04, 8.00266697e-04, 3.45000000e+05, 1.53000000e+02] )
+x0 = np.array( [1.12083333e-04, 2.20416667e-04, 1.42216680e-04, 7.54165016e-04, 3.45000000e+05, 7.20000000e+06] )
+x0 = np.array( [1.3*1.12083333e-04, 1.3*2.20416667e-04, 1.3*1.42216680e-04, 1.3*7.54165016e-04, 3.45000000e+05, 7.20000000e+06] )
+bounds_raw = np.array( [0.75*np.asarray(x0), 1.25*np.asarray(x0)] )   # 50 % around base case
 
 # regularizer calculation
 regularizer = np.zeros(x0.size)
@@ -58,14 +63,56 @@ g = py"g"
 x0 = py"x0*regularizer"
 searchSpace = py"bounds_reg"
 dim = sim_jl.n_dof
-op1 = optProblem(f, g, x0, searchSpace, dim, sim_jl)
+op1 = optProblem(f, g, x0, searchSpace, dim, sim_jl, py"sim.n_dof", py"sim.n_f", py"sim.n_g")
 op1.sim_jl.verbose = false;
 save_sim() = py"""sim.interface.SaveFlowsheet(sim.flowsheet,$pwd()+"/examples/PRICO/PRICO2.dwxmz",True)"""
 
-# model = Model(optimizer_with_attributes(Ipopt.Optimizer))
-model = Model(Ipopt.Optimizer)
-set_optimizer_attribute(model, "max_cpu_time", 600.0)
-set_optimizer_attribute(model, "print_level", 0)
+# external functions and jacobian calculations
+x0 = 1.0 * (op1.searchSpace[1, :] + op1.searchSpace[2, :]) ./ 2
+# x0 = py"x0*regularizer"
+function f_block(x)
+    return [op1.f(x)[1]; op1.g(x)[:]]
+end
+first_time = true
+function jac_block(x)
+    # println("hi")
+    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp, first_time
+    if norm(x0 - x) > 1e-5 || first_time == true
+        f0 = f_block(x)
+        println("Calculating jacobian of black-box functions at x=", x, " and f^{sim}=", f0)
+        # flag_diff_method = "1st_forward"
+        flag_diff_method = "2nd_central"
+        h = 0.01
+        tmp = zeros(6, length(x))
+        for i = 1:length(x)
+            if flag_diff_method == "1st_forward"
+                tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f0) / h
+            elseif flag_diff_method == "2nd_central"
+                tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f_block([x[1:i-1]; x[i] - h; x[i+1:end]])) / (2 * h)
+            end
+        end
+        # tmp = jacobian(forward_fdm(2, 1), f_block, x)[1]
+        ∇f_bkp = tmp[1, :]
+        ∇g1_bkp = tmp[2, :]
+        ∇g2_bkp = tmp[3, :]
+        ∇g3_bkp = tmp[4, :]
+        ∇g4_bkp = tmp[5, :]
+        ∇g5_bkp = tmp[6, :]
+        x0 = x
+        first_time = false
+        return tmp
+    end
+end
+
+## JuMP MODEL STUFF
+model = Model(optimizer_with_attributes(Ipopt.Optimizer))
+# model = Model(Ipopt.Optimizer)
+set_optimizer_attribute(model, "max_cpu_time", 1200.0)
+# model = Model(GAMS.Optimizer)
+# set_optimizer_attribute(model, GAMS.ModelType(), "NLP")
+# set_optimizer_attribute(model, "NLP", "CONOPT")
+# set_optimizer_attribute(model, "resLIM", 1200.0)
+# model = Model(() -> MadNLP.Optimizer(print_level = MadNLP.INFO, max_iter = 100))
 
 # VARIABLES
 i = 1;
@@ -80,39 +127,8 @@ i = 5;
 @variable(model, op1.searchSpace[1, i]' <= x5 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
 i = 6;
 @variable(model, op1.searchSpace[1, i]' <= x6 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
-x0 = 0.95 * (op1.searchSpace[1, :] + op1.searchSpace[2, :]) ./ 2
-function f_block(x)
-    # tmp = [op1.f(x)[1]]
-    # for i = 1:py"sim.n_g"
-    #     tmp = [tmp, op1.g(x)[i]]
-    # end
-    # return tmp
-    return [op1.f(x)[1]; op1.g(x)[:]]
-end
-function jac_block(x)
-    # println("hi")
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    if norm(x0 - x) > 1e-5
-        println("Calculating jacobian of black-box functions at x=", x)
-        f0 = f_block(x)
-        h = 0.1
-        tmp = zeros(6, length(x))
-        for i = 1:length(x)
-            tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f0) / h
-        end
-        # tmp = jacobian(forward_fdm(2, 1), f_block, x)[1]
-        ∇f_bkp = tmp[1, :]
-        ∇g1_bkp = tmp[2, :]
-        ∇g2_bkp = tmp[3, :]
-        ∇g3_bkp = tmp[4, :]
-        ∇g4_bkp = tmp[5, :]
-        ∇g5_bkp = tmp[6, :]
-        x0 = x
-    end
-end
 
 # OBJECTIVE FUNCTION
-# fobj_bb(x) = op1.f([x])
 fobj_bb(x1, x2, x3, x4, x5, x6) = op1.f([x1, x2, x3, x4, x5, x6])[1]
 function ∇fobj_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
     # println("I am in ∇fobj_bb with x=", x1)
@@ -124,9 +140,7 @@ function ∇fobj_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6:
         g[i] = ∇f_tmp[i]
     end
 end
-# ∇fobj_bb(x) = grad(central_fdm(5, 1), op1.f, x)
 register(model, :fobj_bb, op1.dim, fobj_bb, ∇fobj_bb; autodiff = false)
-# @NLobjective(model, Min, fobj_bb(x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8]))
 @NLobjective(model, Min, fobj_bb(x1, x2, x3, x4, x5, x6))
 
 # CONSTRAINTS
@@ -206,3 +220,5 @@ JuMP.optimize!(model)
 println(JuMP.value.([x1, x2, x3, x4, x5, x6]))
 println(JuMP.objective_value(model))
 println(JuMP.termination_status(model))
+
+f_block(JuMP.value.([x1, x2, x3, x4, x5, x6]))
