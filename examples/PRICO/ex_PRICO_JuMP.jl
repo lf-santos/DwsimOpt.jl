@@ -43,7 +43,7 @@ create_pddx( ["MSTR-05", "MassFraction", "Liquid", "x"], sim, element="constrain
 # x0 = np.array( [1.12083333e-04, 1.30420113e-04, 2.57333445e-04, 8.00266697e-04, 3.45000000e+05, 1.53000000e+02] )
 x0 = np.array( [1.12083333e-04, 2.20416667e-04, 1.42216680e-04, 7.54165016e-04, 3.45000000e+05, 7.20000000e+06] )
 x0 = np.array( [1.3*1.12083333e-04, 1.3*2.20416667e-04, 1.3*1.42216680e-04, 1.3*7.54165016e-04, 3.45000000e+05, 7.20000000e+06] )
-bounds_raw = np.array( [0.75*np.asarray(x0), 1.25*np.asarray(x0)] )   # 50 % around base case
+bounds_raw = np.array( [0.5*np.asarray(x0), 1.5*np.asarray(x0)] )   # 50 % around base case
 
 # regularizer calculation
 regularizer = np.zeros(x0.size)
@@ -70,25 +70,34 @@ save_sim() = py"""sim.interface.SaveFlowsheet(sim.flowsheet,$pwd()+"/examples/PR
 # external functions and jacobian calculations
 x0 = 1.0 * (op1.searchSpace[1, :] + op1.searchSpace[2, :]) ./ 2
 # x0 = py"x0*regularizer"
+iter = 0
 function f_block(x)
+    global iter
+    iter += 1
     return [op1.f(x)[1]; op1.g(x)[:]]
 end
 first_time = true
+h = 0.01
+flag_diff_method = "2nd_central"
+flag_FiniteDifference = false
 function jac_block(x)
     # println("hi")
     global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp, first_time
-    if norm(x0 - x) > 1e-5 || first_time == true
+    if norm(x0 - x) > 1e-6 || first_time == true
         f0 = f_block(x)
         println("Calculating jacobian of black-box functions at x=", x, " and f^{sim}=", f0)
         # flag_diff_method = "1st_forward"
-        flag_diff_method = "2nd_central"
-        h = 0.01
+        global h, flag_FiniteDifference, flag_diff_method
         tmp = zeros(6, length(x))
-        for i = 1:length(x)
-            if flag_diff_method == "1st_forward"
-                tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f0) / h
-            elseif flag_diff_method == "2nd_central"
-                tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f_block([x[1:i-1]; x[i] - h; x[i+1:end]])) / (2 * h)
+        if flag_FiniteDifference
+            tmp = jacobian(central_fdm(2, 1), f_block, x)[1]
+        else
+            for i = 1:length(x)
+                if flag_diff_method == "1st_forward"
+                    tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f0) / h
+                elseif flag_diff_method == "2nd_central"
+                    tmp[:, i] = (f_block([x[1:i-1]; x[i] + h; x[i+1:end]]) - f_block([x[1:i-1]; x[i] - h; x[i+1:end]])) / (2 * h)
+                end
             end
         end
         # tmp = jacobian(forward_fdm(2, 1), f_block, x)[1]
@@ -104,121 +113,147 @@ function jac_block(x)
     end
 end
 
-## JuMP MODEL STUFF
-model = Model(optimizer_with_attributes(Ipopt.Optimizer))
-# model = Model(Ipopt.Optimizer)
-set_optimizer_attribute(model, "max_cpu_time", 1200.0)
-# model = Model(GAMS.Optimizer)
-# set_optimizer_attribute(model, GAMS.ModelType(), "NLP")
-# set_optimizer_attribute(model, "NLP", "CONOPT")
-# set_optimizer_attribute(model, "resLIM", 1200.0)
-# model = Model(() -> MadNLP.Optimizer(print_level = MadNLP.INFO, max_iter = 100))
+function setup_model()
+    ## JuMP MODEL STUFF
+    model = Model(optimizer_with_attributes(Ipopt.Optimizer))
+    # model = Model(Ipopt.Optimizer)
+    set_optimizer_attribute(model, "max_cpu_time", 1200.0)
+    # model = Model(GAMS.Optimizer)
+    # set_optimizer_attribute(model, GAMS.ModelType(), "NLP")
+    # set_optimizer_attribute(model, "NLP", "CONOPT")
+    # set_optimizer_attribute(model, "resLIM", 1200.0)
+    # model = Model(() -> MadNLP.Optimizer(print_level = MadNLP.INFO, max_iter = 100))
 
-# VARIABLES
-i = 1;
-@variable(model, op1.searchSpace[1, i]' <= x1 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
-i = 2;
-@variable(model, op1.searchSpace[1, i]' <= x2 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
-i = 3;
-@variable(model, op1.searchSpace[1, i]' <= x3 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
-i = 4;
-@variable(model, op1.searchSpace[1, i]' <= x4 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
-i = 5;
-@variable(model, op1.searchSpace[1, i]' <= x5 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
-i = 6;
-@variable(model, op1.searchSpace[1, i]' <= x6 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
+    # VARIABLES
+    i = 1
+    @variable(model, op1.searchSpace[1, i]' <= x1 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
+    i = 2
+    @variable(model, op1.searchSpace[1, i]' <= x2 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
+    i = 3
+    @variable(model, op1.searchSpace[1, i]' <= x3 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
+    i = 4
+    @variable(model, op1.searchSpace[1, i]' <= x4 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
+    i = 5
+    @variable(model, op1.searchSpace[1, i]' <= x5 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
+    i = 6
+    @variable(model, op1.searchSpace[1, i]' <= x6 <= op1.searchSpace[2, i]', start = (op1.searchSpace[1, i] + op1.searchSpace[2, i]) ./ 2)
 
-# OBJECTIVE FUNCTION
-fobj_bb(x1, x2, x3, x4, x5, x6) = op1.f([x1, x2, x3, x4, x5, x6])[1]
-function ∇fobj_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
-    # println("I am in ∇fobj_bb with x=", x1)
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    jac_block([x1, x2, x3, x4, x5, x6])
-    ∇f_tmp = ∇f_bkp
-    # ∇f_tmp = grad(forward_fdm(2, 1), op1.f, [x1, x2, x3, x4, x5, x6, x7, x8])[1]
-    for i = 1:length([x1, x2, x3, x4, x5, x6])
-        g[i] = ∇f_tmp[i]
+    # OBJECTIVE FUNCTION
+    fobj_bb(x1, x2, x3, x4, x5, x6) = op1.f([x1, x2, x3, x4, x5, x6])[1]
+    function ∇fobj_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
+        # println("I am in ∇fobj_bb with x=", x1)
+        global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
+        jac_block([x1, x2, x3, x4, x5, x6])
+        ∇f_tmp = ∇f_bkp
+        # ∇f_tmp = grad(forward_fdm(2, 1), op1.f, [x1, x2, x3, x4, x5, x6, x7, x8])[1]
+        for i = 1:length([x1, x2, x3, x4, x5, x6])
+            g[i] = ∇f_tmp[i]
+        end
     end
-end
-register(model, :fobj_bb, op1.dim, fobj_bb, ∇fobj_bb; autodiff = false)
-@NLobjective(model, Min, fobj_bb(x1, x2, x3, x4, x5, x6))
+    register(model, :fobj_bb, op1.dim, fobj_bb, ∇fobj_bb; autodiff = false)
+    @NLobjective(model, Min, fobj_bb(x1, x2, x3, x4, x5, x6))
 
-# CONSTRAINTS
-g1(x) = op1.g(x)[1]
-g2(x) = op1.g(x)[2]
-g3(x) = op1.g(x)[3]
-g4(x) = op1.g(x)[4]
-g5(x) = op1.g(x)[5]
-g1_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[1]
-g2_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[2]
-g3_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[3]
-g4_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[4]
-g5_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[5]
-function ∇g1_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
-    # println("I am in ∇g1_bb with x=", x1)
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    jac_block([x1, x2, x3, x4, x5, x6])
-    ∇g1_tmp = ∇g1_bkp
-    for i = 1:length([x1, x2, x3, x4, x5, x6])
-        g[i] = ∇g1_tmp[i]
+    # CONSTRAINTS
+    g1(x) = op1.g(x)[1]
+    g2(x) = op1.g(x)[2]
+    g3(x) = op1.g(x)[3]
+    g4(x) = op1.g(x)[4]
+    g5(x) = op1.g(x)[5]
+    g1_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[1]
+    g2_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[2]
+    g3_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[3]
+    g4_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[4]
+    g5_bb(x1, x2, x3, x4, x5, x6) = op1.g([x1, x2, x3, x4, x5, x6])[5]
+    function ∇g1_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
+        # println("I am in ∇g1_bb with x=", x1)
+        global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
+        jac_block([x1, x2, x3, x4, x5, x6])
+        ∇g1_tmp = ∇g1_bkp
+        for i = 1:length([x1, x2, x3, x4, x5, x6])
+            g[i] = ∇g1_tmp[i]
+        end
     end
-end
-function ∇g2_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
-    # println("I am in ∇g2_bb with x=", x1)
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    jac_block([x1, x2, x3, x4, x5, x6])
-    ∇g2_tmp = ∇g2_bkp
-    for i = 1:length([x1, x2, x3, x4, x5, x6])
-        g[i] = ∇g2_tmp[i]
+    function ∇g2_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
+        # println("I am in ∇g2_bb with x=", x1)
+        global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
+        jac_block([x1, x2, x3, x4, x5, x6])
+        ∇g2_tmp = ∇g2_bkp
+        for i = 1:length([x1, x2, x3, x4, x5, x6])
+            g[i] = ∇g2_tmp[i]
+        end
     end
-end
-function ∇g3_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
-    # println("I am in ∇g2_bb with x=", x1)
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    jac_block([x1, x2, x3, x4, x5, x6])
-    ∇g3_tmp = ∇g3_bkp
-    for i = 1:length([x1, x2, x3, x4, x5, x6])
-        g[i] = ∇g3_tmp[i]
+    function ∇g3_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
+        # println("I am in ∇g2_bb with x=", x1)
+        global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
+        jac_block([x1, x2, x3, x4, x5, x6])
+        ∇g3_tmp = ∇g3_bkp
+        for i = 1:length([x1, x2, x3, x4, x5, x6])
+            g[i] = ∇g3_tmp[i]
+        end
     end
-end
-function ∇g4_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
-    # println("I am in ∇g2_bb with x=", x1)
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    jac_block([x1, x2, x3, x4, x5, x6])
-    ∇g4_tmp = ∇g4_bkp
-    for i = 1:length([x1, x2, x3, x4, x5, x6])
-        g[i] = ∇g4_tmp[i]
+    function ∇g4_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
+        # println("I am in ∇g2_bb with x=", x1)
+        global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
+        jac_block([x1, x2, x3, x4, x5, x6])
+        ∇g4_tmp = ∇g4_bkp
+        for i = 1:length([x1, x2, x3, x4, x5, x6])
+            g[i] = ∇g4_tmp[i]
+        end
     end
-end
-function ∇g5_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
-    # println("I am in ∇g2_bb with x=", x1)
-    global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
-    jac_block([x1, x2, x3, x4, x5, x6])
-    ∇g5_tmp = ∇g5_bkp
-    for i = 1:length([x1, x2, x3, x4, x5, x6])
-        g[i] = ∇g5_tmp[i]
+    function ∇g5_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) where {T}
+        # println("I am in ∇g2_bb with x=", x1)
+        global x0, ∇f_bkp, ∇g1_bkp, ∇g2_bkp, ∇g3_bkp, ∇g4_bkp, ∇g5_bkp
+        jac_block([x1, x2, x3, x4, x5, x6])
+        ∇g5_tmp = ∇g5_bkp
+        for i = 1:length([x1, x2, x3, x4, x5, x6])
+            g[i] = ∇g5_tmp[i]
+        end
     end
-end
-register(model, :g1_bb, op1.dim, g1_bb, ∇g1_bb; autodiff = false)
-@NLconstraint(model, g1_bb(x1, x2, x3, x4, x5, x6) <= 0)
-register(model, :g2_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
-@NLconstraint(model, g2_bb(x1, x2, x3, x4, x5, x6) <= 0)
-register(model, :g3_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
-@NLconstraint(model, g3_bb(x1, x2, x3, x4, x5, x6) <= 0)
-register(model, :g4_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
-@NLconstraint(model, g4_bb(x1, x2, x3, x4, x5, x6) <= 0)
-register(model, :g5_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
-@NLconstraint(model, g5_bb(x1, x2, x3, x4, x5, x6) <= 0)
+    register(model, :g1_bb, op1.dim, g1_bb, ∇g1_bb; autodiff = false)
+    @NLconstraint(model, g1_bb(x1, x2, x3, x4, x5, x6) <= 0)
+    register(model, :g2_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
+    @NLconstraint(model, g2_bb(x1, x2, x3, x4, x5, x6) == 0)
+    register(model, :g3_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
+    @NLconstraint(model, g3_bb(x1, x2, x3, x4, x5, x6) == 0)
+    register(model, :g4_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
+    @NLconstraint(model, g4_bb(x1, x2, x3, x4, x5, x6) == 0)
+    register(model, :g5_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
+    @NLconstraint(model, g5_bb(x1, x2, x3, x4, x5, x6) == 0)
 
+    return model
+end
+
+model = setup_model()
+function set_opt_params(model)
+    set_optimizer_attribute(model, "tol", 1e-1)
+    set_optimizer_attribute(model, "dual_inf_tol", 1.0)
+    set_optimizer_attribute(model, "constr_viol_tol", 1e-2)
+    set_optimizer_attribute(model, "compl_inf_tol", 1e-2)
+    set_optimizer_attribute(model, "acceptable_tol", 1e-2)
+    set_optimizer_attribute(model, "acceptable_iter", 3)
+    # set_optimizer_attribute(model, "mu_target", 1e-6)
+
+    set_optimizer_attribute(model, "hessian_approximation", "limited-memory")
+
+    set_optimizer_attribute(model, "max_iter", 20)
+    set_optimizer_attribute(model, "print_level", 5)
+    return model
+end
+model = set_opt_params(model)
 JuMP.optimize!(model)
+
+iter
+println("Model used h=", h, " and tol=", get_optimizer_attribute(model, "tol"))
+println("Initial value x0=", (op1.searchSpace[1, :] + op1.searchSpace[2, :]) ./ 2)
+op1.searchSpace
 
 @show JuMP.termination_status(model)
 @show JuMP.primal_feasibility_report(model)
 @show JuMP.dual_status(model)
 
 # retrieve the objective value, corresponding x values and the status
-println(JuMP.value.([x1, x2, x3, x4, x5, x6]))
+println([value(model[:x1]), value(model[:x2]), value(model[:x3]), value(model[:x4]), value(model[:x5]), value(model[:x6])])
 println(JuMP.objective_value(model))
 println(JuMP.termination_status(model))
 
-f_block(JuMP.value.([x1, x2, x3, x4, x5, x6]))
+f_block(JuMP.value.([value(model[:x1]), value(model[:x2]), value(model[:x3]), value(model[:x4]), value(model[:x5]), value(model[:x6])]))
