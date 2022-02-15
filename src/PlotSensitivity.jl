@@ -1,9 +1,12 @@
 using Plots
 
+x0 = [1.2778398816059422, 2.2016812643348533, 2.1926874743853113, 7.9498390207039975, 4.181380029504798, 6.317810550389354]
+x0 = [1.5814234453183729, 2.2460481926382125, 2.6910033273896916, 7.51313601869025, 5.090659591398877, 7.064864255336468]
+
 for ii = 1:sim_jl.n_dof
 
     # xx = LinRange(op1.searchSpace[1, ii], op1.searchSpace[2, ii], 11)
-    xx = LinRange(x0[ii] - 0.3, x0[ii] + 0.3, 7)
+    xx = LinRange(x0[ii] - 0.05, x0[ii] + 0.05, 11)
     yy = zeros(size(xx))
     cc = zeros(length(xx), sim_jl.n_g)
     f_name = f_block

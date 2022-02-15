@@ -4,8 +4,8 @@ using JuMP
 using Ipopt
 using FiniteDifferences
 using LinearAlgebra
-using GAMS
-using MadNLP
+# using GAMS
+# using MadNLP
 
 ## SIMULATION OPTIMIZATION PROBLEM DEFINITION
 path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/PRICO/PRICO.dwxmz"
@@ -47,11 +47,12 @@ bounds_raw = np.array( [0.5*np.asarray(x0), 1.5*np.asarray(x0)] )   # 50 % aroun
 
 # regularizer calculation
 regularizer = np.zeros(x0.size)
+regularizer_b = np.zeros(x0.size)
 for i in range(len(regularizer)):
     regularizer[i] = 10**(-1*math.floor(math.log(x0[i],10))) # regularizer for magnitude order of 1e0
 
 # bounds regularized
-bounds_reg = regularizer*bounds_raw
+bounds_reg = regularizer*bounds_raw + regularizer_b
 
 # objective and constraints lambda definitions
 f = lambda x: sim.calculate_optProblem(np.asarray(x)/regularizer)[0:sim.n_f]
@@ -77,7 +78,7 @@ function f_block(x)
     return [op1.f(x)[1]; op1.g(x)[:]]
 end
 first_time = true
-h = 0.01
+h = 0.001
 flag_diff_method = "2nd_central"
 flag_FiniteDifference = false
 function jac_block(x)
@@ -117,7 +118,6 @@ function setup_model()
     ## JuMP MODEL STUFF
     model = Model(optimizer_with_attributes(Ipopt.Optimizer))
     # model = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(model, "max_cpu_time", 1200.0)
     # model = Model(GAMS.Optimizer)
     # set_optimizer_attribute(model, GAMS.ModelType(), "NLP")
     # set_optimizer_attribute(model, "NLP", "CONOPT")
@@ -226,7 +226,7 @@ end
 model = setup_model()
 function set_opt_params(model)
     set_optimizer_attribute(model, "tol", 1e-1)
-    set_optimizer_attribute(model, "dual_inf_tol", 1.0)
+    set_optimizer_attribute(model, "dual_inf_tol", 1e-1)
     set_optimizer_attribute(model, "constr_viol_tol", 1e-2)
     set_optimizer_attribute(model, "compl_inf_tol", 1e-2)
     set_optimizer_attribute(model, "acceptable_tol", 1e-2)
@@ -235,8 +235,9 @@ function set_opt_params(model)
 
     set_optimizer_attribute(model, "hessian_approximation", "limited-memory")
 
-    set_optimizer_attribute(model, "max_iter", 20)
-    set_optimizer_attribute(model, "print_level", 5)
+    set_optimizer_attribute(model, "max_iter", 50)
+    set_optimizer_attribute(model, "max_cpu_time", 3600.0)
+    set_optimizer_attribute(model, "print_level", 6)
     return model
 end
 model = set_opt_params(model)

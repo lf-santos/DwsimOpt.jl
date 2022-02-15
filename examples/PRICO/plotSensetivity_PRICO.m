@@ -3,11 +3,13 @@ x_c3mr_energyopt = [2.5234   40.7939   89.8308   55.5049  238.6822  301.4141  -3
 x_c3mr_uaopt = [13.4173     81.2659     65.6213     37.2365    125.0000    750.0000    -37.0000   -133.8992];
 x_c3mr_test = [2.8014   41.2836   91.0720   54.5242  245.4715  303.3915  -37.0000 -121.6634];
 x_paper_new = x_base;
+xxx=[56.693 80.857 96.876 270.473 0 509.07 706.486];
+x_paper_new = xxx;
 f_name = 'fobj_composite';
 for ii=4
 I = ii;
 % xx = linspace(D_space(1,I),D_space(2,I),11);
-xx = linspace(x_paper_new(I)*0.9,x_paper_new(I)*1.5,11);
+xx = linspace(x_paper_new(I)*0.9,x_paper_new(I)*1.1,11);
 yy = zeros(size(xx));
 cc = zeros(length(xx),10);
 yy_hat = zeros(size(xx));
@@ -24,13 +26,13 @@ for i=1:length(xx)
 end
 figure;
 plot(xx,yy,'r.-')
-hold on
-plot(xx,yy_hat,'g.-')
+% hold on
+% plot(xx,yy_hat,'g.-')
 xlabel((sprintf('x_%d',I))); ylabel('Work consumption (kW)');
 figure;
 plot(xx,cc,'b.-')
-hold on
-plot(xx,cc_hat,'g.-')
+% hold on
+% plot(xx,cc_hat,'g.-')
 title('MITA discretized');
 xlabel(sprintf('x_%d',I)); ylabel('Minimum temperature approach (°C)');
 figure;
