@@ -5,6 +5,9 @@ struct optProblem
     searchSpace
     dim
     sim_jl
+    n_dof
+    n_f
+    n_g
 end
 
 using PyCall
