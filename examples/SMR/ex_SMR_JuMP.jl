@@ -7,15 +7,16 @@ using FiniteDifferences
 using LinearAlgebra
 using PyCall
 
-path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR.dwxmz"
+path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR/SMR.dwxmz"
 path2dwsim = "C:/Users/lfsfr/AppData/Local/DWSIM7/"
 
 include("c:/Users/lfsfr/Desktop/DwsimOpt.jl/src/SimOpt.jl")
-sim_jl = py"sim"
+sim_jl = py"sim_smr"
 
 # just for testing: connect to another simulation
+
 py"""
-sim2 = SimulationOptimization(dof=np.array([]), path2sim= "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR.dwxmz", 
+sim2 = SimulationOptimization(dof=np.array([]), path2sim= "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/SMR/SMR.dwxmz", 
                     path2dwsim = $path2dwsim)
 sim2.connect(interf)
 """
@@ -69,8 +70,10 @@ g = py"g"
 x0 = py"x0*regularizer"
 searchSpace = py"bounds_reg"
 dim = sim_jl.n_dof
-op1 = optProblem(f, g, x0, searchSpace, dim, sim_jl)
+op1 = optProblem(f, g, x0, searchSpace, dim, sim_jl, py"sim.n_dof", py"sim.n_f", py"sim.n_g")
 op1.sim_jl.verbose = false;
+py"sim_smr.verbose=False";
+save_sim() = py"""sim.interface.SaveFlowsheet(sim.flowsheet,$pwd()+"/examples/PRICO/PRICO_composite2.dwxmz",True)"""
 
 # model = Model(optimizer_with_attributes(Ipopt.Optimizer))
 model = Model(Ipopt.Optimizer)
@@ -133,7 +136,7 @@ function ∇fobj_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6:
     end
 end
 # ∇fobj_bb(x) = grad(central_fdm(5, 1), op1.f, x)
-register(model, :fobj_bb, op1.dim, fobj_bb, ∇fobj_bb; autodiff = false)
+register(model, :fobj_bb, op1.dim, fobj_bb, ∇fobj_bb; autodiff=false)
 # @NLobjective(model, Min, fobj_bb(x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8]))
 @NLobjective(model, Min, fobj_bb(x1, x2, x3, x4, x5, x6, x7, x8))
 
@@ -162,10 +165,10 @@ function ∇g2_bb(g::AbstractVector{T}, x1::T, x2::T, x3::T, x4::T, x5::T, x6::T
         g[i] = ∇g2_tmp[i]
     end
 end
-register(model, :g1_bb, op1.dim, g1_bb, ∇g1_bb; autodiff = false)
+register(model, :g1_bb, op1.dim, g1_bb, ∇g1_bb; autodiff=false)
 
 @NLconstraint(model, g1_bb(x1, x2, x3, x4, x5, x6, x7, x8) <= 0)
-register(model, :g2_bb, op1.dim, g2_bb, ∇g2_bb; autodiff = false)
+register(model, :g2_bb, op1.dim, g2_bb, ∇g2_bb; autodiff=false)
 @NLconstraint(model, g2_bb(x1, x2, x3, x4, x5, x6, x7, x8) <= 0)
 
 JuMP.optimize!(model)

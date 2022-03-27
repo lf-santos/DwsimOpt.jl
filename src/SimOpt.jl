@@ -51,7 +51,10 @@ sim.add_refs()
 
 # Instanciate automation manager object
 from DWSIM.Automation import Automation2
-interf = Automation2()
+try:
+    interf != None
+except:
+    interf = Automation2()
 
 # Connect simulation in sim.path2sim
 sim.connect(interf)
