@@ -8,7 +8,7 @@ using LinearAlgebra
 # using MadNLP
 
 ## SIMULATION OPTIMIZATION PROBLEM DEFINITION
-path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/PRICO/PRICO.dwxmz"
+path2sim = "c:/Users/lfsfr/Desktop/DwsimOpt.jl/examples/PRICO/PRICO_composite.dwxmz"
 path2dwsim = "C:/Users/lfsfr/AppData/Local/DWSIM7/"
 
 include("c:/Users/lfsfr/Desktop/DwsimOpt.jl/src/SimOpt.jl")
@@ -32,7 +32,8 @@ create_pddx( ["Sum_W", "EnergyFlow", "Mixture", "kW"], sim, element="fobj" )
 
 # adding constraints (g_i <= 0):
 g1 = create_pddx( ["MITA1-Calc", "OutputVariable", "mita", "°C"], sim, element="constraint", assign=False )
-assign_pddx( lambda: 3-g1[0]() , ["MITA1-Calc", "OutputVariable", "mita", "°C"], sim, element="constraint" )
+r = 1.0/3
+assign_pddx( lambda: r*(3-g1[0]()) , ["MITA1-Calc", "OutputVariable", "mita", "°C"], sim, element="constraint" )
 create_pddx( ["MSTR-27", "MassFraction", "Liquid", "x"], sim, element="constraint" )
 create_pddx( ["MR-1", "MassFraction", "Liquid", "x"], sim, element="constraint" )
 create_pddx( ["MSTR-03", "MassFraction", "Liquid", "x"], sim, element="constraint" )
@@ -66,7 +67,7 @@ searchSpace = py"bounds_reg"
 dim = sim_jl.n_dof
 op1 = optProblem(f, g, x0, searchSpace, dim, sim_jl, py"sim.n_dof", py"sim.n_f", py"sim.n_g")
 op1.sim_jl.verbose = false;
-save_sim() = py"""sim.interface.SaveFlowsheet(sim.flowsheet,$pwd()+"/examples/PRICO/PRICO2.dwxmz",True)"""
+save_sim() = py"""sim.interface.SaveFlowsheet(sim.flowsheet,$pwd()+"/examples/PRICO/PRICO_composite2.dwxmz",True)"""
 
 # external functions and jacobian calculations
 x0 = 1.0 * (op1.searchSpace[1, :] + op1.searchSpace[2, :]) ./ 2
@@ -78,7 +79,7 @@ function f_block(x)
     return [op1.f(x)[1]; op1.g(x)[:]]
 end
 first_time = true
-h = 0.001
+h = 0.01
 flag_diff_method = "2nd_central"
 flag_FiniteDifference = false
 function jac_block(x)
@@ -101,6 +102,7 @@ function jac_block(x)
                 end
             end
         end
+        println("∇f_block=", tmp)
         # tmp = jacobian(forward_fdm(2, 1), f_block, x)[1]
         ∇f_bkp = tmp[1, :]
         ∇g1_bkp = tmp[2, :]
@@ -225,9 +227,9 @@ end
 
 model = setup_model()
 function set_opt_params(model)
-    set_optimizer_attribute(model, "tol", 1e-1)
-    set_optimizer_attribute(model, "dual_inf_tol", 1e-1)
-    set_optimizer_attribute(model, "constr_viol_tol", 1e-2)
+    set_optimizer_attribute(model, "tol", 1e-2)
+    set_optimizer_attribute(model, "dual_inf_tol", 1e-2)
+    set_optimizer_attribute(model, "constr_viol_tol", 1e-3)
     set_optimizer_attribute(model, "compl_inf_tol", 1e-2)
     set_optimizer_attribute(model, "acceptable_tol", 1e-2)
     set_optimizer_attribute(model, "acceptable_iter", 3)
@@ -237,7 +239,7 @@ function set_opt_params(model)
 
     set_optimizer_attribute(model, "max_iter", 50)
     set_optimizer_attribute(model, "max_cpu_time", 3600.0)
-    set_optimizer_attribute(model, "print_level", 6)
+    set_optimizer_attribute(model, "print_level", 5)
     return model
 end
 model = set_opt_params(model)
